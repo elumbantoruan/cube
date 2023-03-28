@@ -21,9 +21,12 @@ var stateTransitionMap = map[State]map[State]interface{}{
 		Running:   nil,
 		Completed: nil,
 		Failed:    nil,
+		Scheduled: nil,
 	},
 	Completed: {},
-	Failed:    {},
+	Failed: {
+		Scheduled: nil,
+	},
 }
 
 func ValidStateTransition(src State, dst State) bool {

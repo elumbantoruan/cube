@@ -1,19 +1,20 @@
 package task
 
 import (
-	"context"
-	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"time"
+
+	"context"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
+	"github.com/moby/moby/pkg/stdcopy"
 )
 
 type Task struct {
@@ -26,10 +27,13 @@ type Task struct {
 	Memory        int64
 	Disk          int64
 	ExposedPorts  nat.PortSet
+	HostPorts     nat.PortMap
 	PortBindings  map[string]string
 	RestartPolicy string
 	StartTime     time.Time
 	FinishTime    time.Time
+	HealthCheck   string
+	RestartCount  int
 }
 
 type TaskEvent struct {
@@ -39,18 +43,31 @@ type TaskEvent struct {
 	Task      Task
 }
 
+// Config struct to hold Docker container config
 type Config struct {
-	Name          string
-	AttachStdin   bool
-	AttachStdout  bool
-	AttachStderr  bool
-	ExposedPorts  nat.PortSet
-	Cmd           []string
-	Image         string
-	Cpu           float64
-	Memory        int64
-	Disk          int64
-	Env           []string
+	// Name of the task, also used as the container name
+	Name string
+	// AttachStdin boolean which determines if stdin should be attached
+	AttachStdin bool
+	// AttachStdout boolean which determines if stdout should be attached
+	AttachStdout bool
+	// AttachStderr boolean which determines if stderr should be attached
+	AttachStderr bool
+	// ExposedPorts list of ports exposed
+	ExposedPorts nat.PortSet
+	// Cmd to be run inside container (optional)
+	Cmd []string
+	// Image used to run the container
+	Image string
+	// Cpu
+	Cpu float64
+	// Memory in MiB
+	Memory int64
+	// Disk in GiB
+	Disk int64
+	// Env variables
+	Env []string
+	// RestartPolicy for the container ["", "always", "unless-stopped", "on-failure"]
 	RestartPolicy string
 }
 
@@ -86,10 +103,14 @@ type DockerResult struct {
 	Result      string
 }
 
+type DockerInspectResponse struct {
+	Error     error
+	Container *types.ContainerJSON
+}
+
 func (d *Docker) Run() DockerResult {
 	ctx := context.Background()
-	reader, err := d.Client.ImagePull(
-		ctx, d.Config.Image, types.ImagePullOptions{})
+	reader, err := d.Client.ImagePull(ctx, d.Config.Image, types.ImagePullOptions{})
 	if err != nil {
 		log.Printf("Error pulling image %s: %v\n", d.Config.Image, err)
 		return DockerResult{Error: err}
@@ -101,7 +122,8 @@ func (d *Docker) Run() DockerResult {
 	}
 
 	r := container.Resources{
-		Memory: d.Config.Memory,
+		Memory:   d.Config.Memory,
+		NanoCPUs: int64(d.Config.Cpu * math.Pow(10, 9)),
 	}
 
 	hc := container.HostConfig{
@@ -117,7 +139,7 @@ func (d *Docker) Run() DockerResult {
 		ExposedPorts: d.Config.ExposedPorts,
 	}, &hc, nil, nil, d.Config.Name)
 	if err != nil {
-		log.Printf("Error creating container using image %s: %v\n", d.Config.Name, err)
+		log.Printf("Error creating container using image %s: %v\n", d.Config.Image, err)
 		return DockerResult{Error: err}
 	}
 
@@ -137,19 +159,38 @@ func (d *Docker) Run() DockerResult {
 	return DockerResult{ContainerId: resp.ID, Action: "start", Result: "success"}
 }
 
+func (d *Docker) Remove(id string) DockerResult {
+	log.Printf("Attempting to remove container %v", id)
+	ctx := context.Background()
+	err := d.Client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: false, Force: false})
+	if err != nil {
+		log.Printf("Error removing container %s: %v\n", id, err)
+		return DockerResult{Error: err}
+	}
+
+	return DockerResult{Action: "remove", Result: "success", Error: nil}
+}
+
 func (d *Docker) Stop(id string) DockerResult {
 	log.Printf("Attempting to stop container %v", id)
 	ctx := context.Background()
 	err := d.Client.ContainerStop(ctx, id, container.StopOptions{})
 	if err != nil {
-		fmt.Println(err)
-		panic(err)
-	}
-
-	err = d.Client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: false, Force: false})
-	if err != nil {
-		panic(err)
+		log.Printf("Error stopping container %s: %v\n", id, err)
+		return DockerResult{Error: err}
 	}
 
 	return DockerResult{Action: "stop", Result: "success", Error: nil}
+}
+
+func (d *Docker) Inspect(containerID string) DockerInspectResponse {
+	dc, _ := client.NewClientWithOpts(client.FromEnv)
+	ctx := context.Background()
+	resp, err := dc.ContainerInspect(ctx, containerID)
+	if err != nil {
+		log.Printf("Error inspecting container: %s\n", err)
+		return DockerInspectResponse{Error: err}
+	}
+
+	return DockerInspectResponse{Container: &resp}
 }
