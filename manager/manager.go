@@ -319,7 +319,7 @@ func (m *Manager) SendWork() {
 			return
 		}
 
-		log.Printf("[manager] selected worker %s for task %s\n", t.ID, err)
+		log.Printf("[manager] selected worker %s for task %s\n", w.Name, t.ID)
 
 		m.WorkerTaskMap[w.Name] = append(m.WorkerTaskMap[w.Name], te.Task.ID)
 		m.TaskWorkerMap[t.ID] = w.Name
