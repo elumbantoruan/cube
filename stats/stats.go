@@ -1,4 +1,4 @@
-package worker
+package stats
 
 import (
 	"log"
@@ -43,16 +43,15 @@ func (s *Stats) DiskUsed() uint64 {
 }
 
 func (s *Stats) CpuUsage() float64 {
-
 	idle := s.CpuStats.Idle + s.CpuStats.IOWait
 	nonIdle := s.CpuStats.User + s.CpuStats.Nice + s.CpuStats.System + s.CpuStats.IRQ + s.CpuStats.SoftIRQ + s.CpuStats.Steal
 	total := idle + nonIdle
 
-	if total == 0 {
+	if total == 0 && idle == 0 {
 		return 0.00
 	}
 
-	return (float64(total) - float64(idle)) / float64(total)
+	return (float64(total)) - float64(idle)/float64(total)
 }
 
 func GetStats() *Stats {
@@ -71,7 +70,6 @@ func GetMemoryInfo() *linux.MemInfo {
 		log.Printf("Error reading from /proc/meminfo")
 		return &linux.MemInfo{}
 	}
-
 	return memstats
 }
 
@@ -82,7 +80,6 @@ func GetDiskInfo() *linux.Disk {
 		log.Printf("Error reading from /")
 		return &linux.Disk{}
 	}
-
 	return diskstats
 }
 
@@ -93,7 +90,6 @@ func GetCpuStats() *linux.CPUStat {
 		log.Printf("Error reading from /proc/stat")
 		return &linux.CPUStat{}
 	}
-
 	return &stats.CPUStatAll
 }
 
@@ -104,6 +100,5 @@ func GetLoadAvg() *linux.LoadAvg {
 		log.Printf("Error reading from /proc/loadavg")
 		return &linux.LoadAvg{}
 	}
-
 	return loadavg
 }

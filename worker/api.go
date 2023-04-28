@@ -34,6 +34,7 @@ func (a *Api) initRouter() {
 }
 
 func (a *Api) Start() {
+	fmt.Printf("Starting worker at %s:%d\n", a.Address, a.Port)
 	a.initRouter()
 	http.ListenAndServe(fmt.Sprintf("%s:%d", a.Address, a.Port), a.Router)
 }
