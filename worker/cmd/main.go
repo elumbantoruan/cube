@@ -12,7 +12,7 @@ func main() {
 	wport, _ := strconv.Atoi(os.Getenv("CUBE_WORKER_PORT"))
 	wName := os.Getenv("CUBE_WORKER_NAME")
 	wrk := worker.New(wName, "memory")
-	log.Printf("host: %s, port: %d\n", whost, wport)
+	log.Printf("worker name: %s host: %s, port: %d\n", wName, whost, wport)
 
 	wrkAPI := worker.Api{Address: whost, Port: wport, Worker: wrk}
 
